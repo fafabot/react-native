@@ -10,15 +10,28 @@ export default function Contador() {
 
       <Text style={estilos.numero}>{contador}</Text>
 
-      <TouchableOpacity style={estilos.botaoAumentar} onPress={() => setContador(contador + 1)}>
+      <TouchableOpacity
+        style={estilos.botaoAumentar}
+        onPress={() => setContador(prev => prev + 1)}
+      >
         <Text style={estilos.botaoTexto}>Aumentar</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={estilos.botaoDiminuir} onPress={() => setContador(contador - 1)}>
+      <TouchableOpacity
+        style={estilos.botaoDiminuir}
+        onPress={() => {
+          if (contador > 0) {
+            setContador(prev => prev - 1);
+          }
+        }}
+      >
         <Text style={estilos.botaoTexto}>Diminuir</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={estilos.botaoReset} onPress={() => setContador(0)}>
+      <TouchableOpacity
+        style={estilos.botaoReset}
+        onPress={() => setContador(0)}
+      >
         <Text style={estilos.botaoTexto}>Resetar</Text>
       </TouchableOpacity>
     </View>
