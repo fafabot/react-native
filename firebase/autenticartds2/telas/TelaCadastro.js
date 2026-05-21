@@ -61,7 +61,7 @@ const estilos = StyleSheet.create({
   },
   input: {
     
-    width: '50%',
+    width: '80%',
     height: 55,
     borderRadius: 30,
     paddingHorizontal: 20,
@@ -77,7 +77,7 @@ const estilos = StyleSheet.create({
     elevation: 3,
   },
   button: {
-    width: '50%',
+    width: '80%',
     height: 55,
     backgroundColor: '#3d7bff',
     justifyContent: 'center',

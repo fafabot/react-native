@@ -63,7 +63,7 @@ const estilos = StyleSheet.create({
     letterSpacing: 0.8,
   },
   input: {
-    width: '50%',
+    width: '80%',
     height: 55,
     borderRadius: 30,
     paddingHorizontal: 20,
@@ -79,7 +79,7 @@ const estilos = StyleSheet.create({
     elevation: 3,
   },
   button: {
-    width: '50%',
+    width: '80%',
     height: 55,
     backgroundColor: '#3d7bff',
     justifyContent: 'center',
@@ -106,7 +106,7 @@ const estilos = StyleSheet.create({
     fontWeight: '600',
   },
   linkButton: {
-    width: '50%',
+    width: '80%',
     height: 55,
     backgroundColor: '#2bbd7e',
     justifyContent: 'center',
