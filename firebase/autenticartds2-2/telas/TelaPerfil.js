@@ -1,0 +1,645 @@
+// TelaPerfil.js
+
+import React, { useEffect, useState } from 'react';
+
+import {
+  View,
+  Text,
+  TextInput,
+  Button,
+  Image,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
+
+import * as ImagePicker from 'expo-image-picker';
+
+import {
+  autenticacao,
+  firestore,
+  storage,
+} from '../config/firebaseConfig';
+
+import {
+  doc,
+  getDoc,
+  setDoc,
+} from 'firebase/firestore';
+
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} from 'firebase/storage';
+
+import { updateProfile } from 'firebase/auth';
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const camposIniciais = {
+  nome: '',
+  sobrenome: '',
+  rua: '',
+  bairro: '',
+  cidade: '',
+  estado: '',
+  cep: '',
+  telefone: '',
+};
+
+export default function TelaPerfil() {
+  const [perfil, setPerfil] = useState(camposIniciais);
+
+  const [photoUrl, setPhotoUrl] = useState(null);
+
+  const [localImage, setLocalImage] = useState(null);
+
+  const [editando, setEditando] = useState(false);
+
+  const [carregando, setCarregando] = useState(true);
+
+  const [salvando, setSalvando] = useState(false);
+
+  const usuario = autenticacao.currentUser;
+
+  useEffect(() => {
+    const carregarDados = async () => {
+      if (!usuario) {
+        setCarregando(false);
+        return;
+      }
+
+      const storageKey = `@perfil_usuario_${usuario.uid}`;
+
+      try {
+        const perfilLocal =
+          await AsyncStorage.getItem(storageKey);
+
+        if (perfilLocal) {
+          const dadosLocais =
+            JSON.parse(perfilLocal);
+
+          setPerfil({
+            nome: dadosLocais.nome || '',
+            sobrenome:
+              dadosLocais.sobrenome || '',
+            rua: dadosLocais.rua || '',
+            bairro: dadosLocais.bairro || '',
+            cidade: dadosLocais.cidade || '',
+            estado: dadosLocais.estado || '',
+            cep: dadosLocais.cep || '',
+            telefone:
+              dadosLocais.telefone || '',
+          });
+
+          setPhotoUrl(
+            dadosLocais.fotoUrl || null
+          );
+
+          setCarregando(false);
+        }
+      } catch (erro) {
+        console.log(
+          'Erro AsyncStorage:',
+          erro
+        );
+      }
+
+      try {
+        const perfilRef = doc(
+          firestore,
+          'users',
+          usuario.uid
+        );
+
+        const perfilSnap =
+          await getDoc(perfilRef);
+
+        if (perfilSnap.exists()) {
+          const dados = perfilSnap.data();
+
+          const novosDados = {
+            nome: dados.nome || '',
+            sobrenome:
+              dados.sobrenome || '',
+            rua: dados.rua || '',
+            bairro: dados.bairro || '',
+            cidade: dados.cidade || '',
+            estado: dados.estado || '',
+            cep: dados.cep || '',
+            telefone:
+              dados.telefone || '',
+            fotoUrl:
+              dados.fotoUrl ||
+              usuario.photoURL ||
+              null,
+          };
+
+          setPerfil({
+            nome: novosDados.nome,
+            sobrenome:
+              novosDados.sobrenome,
+            rua: novosDados.rua,
+            bairro: novosDados.bairro,
+            cidade: novosDados.cidade,
+            estado: novosDados.estado,
+            cep: novosDados.cep,
+            telefone:
+              novosDados.telefone,
+          });
+
+          setPhotoUrl(
+            novosDados.fotoUrl
+          );
+
+          await AsyncStorage.setItem(
+            storageKey,
+            JSON.stringify(novosDados)
+          );
+        } else {
+          const [
+            primeiroNome,
+            ...resto
+          ] = (
+            usuario.displayName || ''
+          ).split(' ');
+
+          const dadosPadrao = {
+            nome: primeiroNome || '',
+            sobrenome:
+              resto.join(' ') || '',
+            rua: '',
+            bairro: '',
+            cidade: '',
+            estado: '',
+            cep: '',
+            telefone: '',
+            fotoUrl:
+              usuario.photoURL || null,
+          };
+
+          setPerfil({
+            nome: dadosPadrao.nome,
+            sobrenome:
+              dadosPadrao.sobrenome,
+            rua: dadosPadrao.rua,
+            bairro: dadosPadrao.bairro,
+            cidade: dadosPadrao.cidade,
+            estado: dadosPadrao.estado,
+            cep: dadosPadrao.cep,
+            telefone:
+              dadosPadrao.telefone,
+          });
+
+          setPhotoUrl(
+            dadosPadrao.fotoUrl
+          );
+
+          setEditando(true);
+
+          await AsyncStorage.setItem(
+            storageKey,
+            JSON.stringify(dadosPadrao)
+          );
+        }
+      } catch (erro) {
+        console.log(
+          'Erro Firestore:',
+          erro
+        );
+
+        Alert.alert(
+          'Erro',
+          'Não foi possível carregar o perfil.'
+        );
+      } finally {
+        setCarregando(false);
+      }
+    };
+
+    carregarDados();
+  }, []);
+
+  const selecionarFoto = async () => {
+    const permissao =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (permissao.status !== 'granted') {
+      Alert.alert(
+        'Permissão negada',
+        'Permita acesso à galeria.'
+      );
+
+      return;
+    }
+
+    const resultado =
+      await ImagePicker.launchImageLibraryAsync({
+        mediaTypes:
+          ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.7,
+      });
+
+    if (
+      !resultado.canceled &&
+      resultado.assets?.length > 0
+    ) {
+      setLocalImage(
+        resultado.assets[0].uri
+      );
+    }
+  };
+
+  const uploadImageAsync = async (
+    uri
+  ) => {
+    const response = await fetch(uri);
+
+    const blob = await response.blob();
+
+    const imagemRef = ref(
+      storage,
+      `profilePictures/${usuario.uid}/${Date.now()}`
+    );
+
+    const snapshot = await uploadBytes(
+      imagemRef,
+      blob
+    );
+
+    return await getDownloadURL(
+      snapshot.ref
+    );
+  };
+
+  const salvarPerfil = async () => {
+    if (!usuario) return;
+
+    setSalvando(true);
+
+    try {
+      let uploadedUrl = photoUrl;
+
+      if (localImage) {
+        uploadedUrl =
+          await uploadImageAsync(
+            localImage
+          );
+      }
+
+      const nomeCompleto = `${perfil.nome} ${perfil.sobrenome}`.trim();
+
+      const usuarioAtualizado = {};
+
+      if (nomeCompleto) {
+        usuarioAtualizado.displayName =
+          nomeCompleto;
+      }
+
+      if (uploadedUrl) {
+        usuarioAtualizado.photoURL =
+          uploadedUrl;
+      }
+
+      if (
+        Object.keys(usuarioAtualizado)
+          .length > 0
+      ) {
+        await updateProfile(
+          usuario,
+          usuarioAtualizado
+        );
+      }
+
+      const perfilRef = doc(
+        firestore,
+        'users',
+        usuario.uid
+      );
+
+      const novosDados = {
+        nome: perfil.nome,
+        sobrenome:
+          perfil.sobrenome,
+        rua: perfil.rua,
+        bairro: perfil.bairro,
+        cidade: perfil.cidade,
+        estado: perfil.estado,
+        cep: perfil.cep,
+        telefone:
+          perfil.telefone,
+        fotoUrl:
+          uploadedUrl || null,
+        updatedAt: new Date(),
+      };
+
+      await setDoc(
+        perfilRef,
+        novosDados,
+        {
+          merge: true,
+        }
+      );
+
+      const storageKey = `@perfil_usuario_${usuario.uid}`;
+
+      await AsyncStorage.setItem(
+        storageKey,
+        JSON.stringify(novosDados)
+      );
+
+      setPhotoUrl(uploadedUrl);
+
+      setLocalImage(null);
+
+      setEditando(false);
+
+      Alert.alert(
+        'Sucesso',
+        'Perfil atualizado.'
+      );
+    } catch (erro) {
+      console.log(erro);
+
+      Alert.alert(
+        'Erro',
+        'Não foi possível salvar.'
+      );
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const atualizarCampo = (
+    campo,
+    valor
+  ) => {
+    setPerfil((anterior) => ({
+      ...anterior,
+      [campo]: valor,
+    }));
+  };
+
+  if (carregando) {
+    return (
+      <View style={estilos.centralizado}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      contentContainerStyle={
+        estilos.container
+      }
+    >
+      <Text style={estilos.titulo}>
+        Perfil do Usuário
+      </Text>
+
+      <View
+        style={estilos.avatarContainer}
+      >
+        {localImage ? (
+          <Image
+            source={{
+              uri: localImage,
+            }}
+            style={estilos.avatar}
+          />
+        ) : photoUrl ? (
+          <Image
+            source={{
+              uri: photoUrl,
+            }}
+            style={estilos.avatar}
+          />
+        ) : (
+          <View
+            style={[
+              estilos.avatar,
+              estilos.avatarVazio,
+            ]}
+          >
+            <Text
+              style={
+                estilos.avatarTexto
+              }
+            >
+              Foto
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {editando && (
+        <Button
+          title="Alterar Foto"
+          onPress={selecionarFoto}
+        />
+      )}
+
+      <Text>Nome</Text>
+
+      <TextInput
+        style={estilos.input}
+        value={perfil.nome}
+        onChangeText={(valor) =>
+          atualizarCampo(
+            'nome',
+            valor
+          )
+        }
+        editable={editando}
+      />
+
+      <Text>Sobrenome</Text>
+
+      <TextInput
+        style={estilos.input}
+        value={perfil.sobrenome}
+        onChangeText={(valor) =>
+          atualizarCampo(
+            'sobrenome',
+            valor
+          )
+        }
+        editable={editando}
+      />
+
+      <Text>Rua</Text>
+
+      <TextInput
+        style={estilos.input}
+        value={perfil.rua}
+        onChangeText={(valor) =>
+          atualizarCampo(
+            'rua',
+            valor
+          )
+        }
+        editable={editando}
+      />
+
+      <Text>Bairro</Text>
+
+      <TextInput
+        style={estilos.input}
+        value={perfil.bairro}
+        onChangeText={(valor) =>
+          atualizarCampo(
+            'bairro',
+            valor
+          )
+        }
+        editable={editando}
+      />
+
+      <Text>Cidade</Text>
+
+      <TextInput
+        style={estilos.input}
+        value={perfil.cidade}
+        onChangeText={(valor) =>
+          atualizarCampo(
+            'cidade',
+            valor
+          )
+        }
+        editable={editando}
+      />
+
+      <Text>Estado</Text>
+
+      <TextInput
+        style={estilos.input}
+        value={perfil.estado}
+        onChangeText={(valor) =>
+          atualizarCampo(
+            'estado',
+            valor
+          )
+        }
+        editable={editando}
+      />
+
+      <Text>CEP</Text>
+
+      <TextInput
+        style={estilos.input}
+        value={perfil.cep}
+        onChangeText={(valor) =>
+          atualizarCampo(
+            'cep',
+            valor
+          )
+        }
+        editable={editando}
+        keyboardType="numeric"
+      />
+
+      <Text>Telefone</Text>
+
+      <TextInput
+        style={estilos.input}
+        value={perfil.telefone}
+        onChangeText={(valor) =>
+          atualizarCampo(
+            'telefone',
+            valor
+          )
+        }
+        editable={editando}
+        keyboardType="phone-pad"
+      />
+
+      {editando ? (
+        <>
+          <Button
+            title={
+              salvando
+                ? 'Salvando...'
+                : 'Salvar Perfil'
+            }
+            onPress={salvarPerfil}
+            disabled={salvando}
+          />
+
+          <View style={estilos.espaco} />
+
+          <Button
+            title="Cancelar"
+            onPress={() =>
+              setEditando(false)
+            }
+          />
+        </>
+      ) : (
+        <Button
+          title="Editar Perfil"
+          onPress={() =>
+            setEditando(true)
+          }
+        />
+      )}
+    </ScrollView>
+  );
+}
+
+const estilos = StyleSheet.create({
+  container: {
+    padding: 20,
+  },
+
+  titulo: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    marginBottom: 12,
+    padding: 10,
+  },
+
+  avatarContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+
+  avatar: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    marginBottom: 12,
+  },
+
+  avatarVazio: {
+    backgroundColor: '#ddd',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  avatarTexto: {
+    color: '#555',
+    fontSize: 16,
+  },
+
+  centralizado: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  espaco: {
+    height: 10,
+  },
+});
